@@ -81,6 +81,18 @@ g.comp{cursor:move}
   </div>
   <input type="file" id="fileLoad" accept=".json,application/json" hidden>
   <button id="btnPlay" title="Druck auf die Quellen geben und Anlage schalten lassen">▶ Simulation starten</button>
+  <div class="row" style="margin-top:6px">
+    <button id="btnStepB" title="Schritt zurück" disabled>⏮</button>
+    <button id="btnPause" title="Pause / Weiter" disabled>⏸</button>
+    <button id="btnStepF" title="Schritt vor" disabled>⏭</button>
+  </div>
+  <label>Simulations-Geschwindigkeit</label>
+  <select id="selSpeed">
+    <option value="0.25">0,25× (langsam)</option>
+    <option value="0.5">0,5×</option>
+    <option value="1" selected>1× (normal)</option>
+    <option value="2">2× (schnell)</option>
+  </select>
   <div class="grp">Versorgung</div>
   <button class="pal" data-type="quelle">Druckluftquelle</button>
   <button class="pal" data-type="behaelter">Luftbehälter</button>
@@ -104,6 +116,7 @@ g.comp{cursor:move}
     • <b>Strg+C</b> kopieren · <b>Strg+V</b> einfügen · <b>Strg+X</b> ausschneiden<br>
     • <b>Strg+Z</b> rückgängig · <b>Strg+Y</b> wiederholen<br>
     • Leitung: Anschluss (Kreis) anklicken, dann zweiten Anschluss anklicken<br>
+    • Je Anschluss nur <b>eine</b> Leitung — Verzweigungen über Knoten auf der Leitung<br>
     • Abzweig: beim Leitungsziehen auf eine Leitung klicken, oder Doppelklick auf eine Leitung setzt einen Knoten<br>
     • Mittlere Leitungssegmente lassen sich mit der Maus verschieben<br>
     • <b>R</b> = drehen · <b>X</b> = löschen · <b>Esc</b>/Rechtsklick = abbrechen<br>
@@ -111,7 +124,7 @@ g.comp{cursor:move}
     • Schalldämpfer rastet direkt auf Anschlüssen ein<br>
     • Bauteil löschen lässt Leitungen als Knoten stehen — neues Bauteil einfach passend daraufsetzen<br>
     • Endlagen-Sensor: auf den Zylinder setzen (vorn = ausgefahren, hinten = eingefahren); am Ventil Betätigung „Pneumatisch (Sensor)" wählen<br>
-    • <b>Simulation:</b> Ventilseite anklicken und halten = betätigen; rastende Betätigungen schalten je Klick um. Druck-betätigte Ventile bekommen Steueranschlüsse 12/14. Dunkelblaue Leitungen führen Druck.
+    • <b>Simulation:</b> Ventilseite anklicken und halten = betätigen; rastende Betätigungen schalten je Klick um. <b>Strg</b>+Klick hält Taster gedrückt, bis Strg losgelassen wird (mehrere gleichzeitig möglich). Druck-betätigte Ventile bekommen Steueranschlüsse 12/14. Dunkelblaue Leitungen führen Druck.
   </div>
 </div>
 
@@ -530,6 +543,17 @@ function wirePts(A,B,adj){
   return[A,a2,...mids,b2,B];
 }
 function wireD(A,B,adj){return'M'+wirePts(A,B,adj).map(p=>`${p.x},${p.y}`).join(' L');}
+function partialPts(pts,len){
+  const out=[pts[0]];
+  let rem=len;
+  for(let i=0;i<pts.length-1&&rem>0;i++){
+    const dx=pts[i+1].x-pts[i].x,dy=pts[i+1].y-pts[i].y;
+    const seg=Math.hypot(dx,dy);
+    if(seg<=rem){out.push(pts[i+1]);rem-=seg;}
+    else{out.push({x:pts[i].x+dx*rem/seg,y:pts[i].y+dy*rem/seg});rem=0;}
+  }
+  return out;
+}
 function nearestSegIdx(pts,pt){
   let bi=0,bd=1e9;
   for(let i=0;i<pts.length-1;i++){
@@ -578,9 +602,17 @@ function render(){
     '</defs>';
   s+='<rect x="-5000" y="-5000" width="14000" height="14000" fill="url(#grid)"/>';
   for(const w of state.wires){
-    const d=wireD(absPort(w.a),absPort(w.b),w.adj);
-    const hot=simOn&&(simVals[nk(w.a.c,w.a.p)]||0)>0;
-    s+=`<path d="${d}" class="wire${hot?' hot':''}${isSel('wire',w.id)?' selw':''}"/>`;
+    const pts=wirePts(absPort(w.a),absPort(w.b),w.adj);
+    const d='M'+pts.map(p=>`${p.x},${p.y}`).join(' L');
+    const full=simOn&&(simVals[nk(w.a.c,w.a.p)]||0)>0&&(simVals[nk(w.b.c,w.b.p)]||0)>0;
+    s+=`<path d="${d}" class="wire${full?' hot':''}${isSel('wire',w.id)?' selw':''}"/>`;
+    if(simOn&&!full){
+      const f=simFill[w.id];
+      if(f){
+        if(f.a>0.5)s+=`<path d="${'M'+partialPts(pts,f.a).map(p=>`${p.x},${p.y}`).join(' L')}" class="wire hot" pointer-events="none"/>`;
+        if(f.b>0.5)s+=`<path d="${'M'+partialPts([...pts].reverse(),f.b).map(p=>`${p.x},${p.y}`).join(' L')}" class="wire hot" pointer-events="none"/>`;
+      }
+    }
     s+=`<path d="${d}" class="wirehit" data-wire="${w.id}"/>`;
   }
   const portUse={};
@@ -591,8 +623,14 @@ function render(){
   const drawOrder=[...state.comps].sort((a,b)=>(a.type==='daempfer'?0:1)-(b.type==='daempfer'?0:1));
   for(const c of drawOrder){
     const def=DEFS[c.type],hb=def.box(c.cfg);
+    let hx=hb.x,hw=hb.w;
+    if(c.type==='ventil'&&simOn){
+      const act=Math.min(simPos[c.id]!=null?simPos[c.id]:c.cfg.rest,c.cfg.pos-1);
+      const off=(c.cfg.rest-act)*40;
+      if(off>0)hw+=off;else{hx+=off;hw-=off;}
+    }
     s+=`<g class="comp" data-comp="${c.id}" transform="translate(${c.x},${c.y}) rotate(${c.rot})">`;
-    s+=`<rect x="${hb.x}" y="${hb.y}" width="${hb.w}" height="${hb.h}" fill="rgba(0,0,0,0)" stroke="none"/>`;
+    s+=`<rect x="${hx}" y="${hb.y}" width="${hw}" height="${hb.h}" fill="rgba(0,0,0,0)" stroke="none"/>`;
     s+=`<g class="sym">${def.draw(c.cfg,c)}</g>`;
     for(const p of def.ports(c.cfg)){
       const act=pending&&pending.c===c.id&&pending.p===p.n;
@@ -957,7 +995,7 @@ function delSel(){
 }
 
 /* ---------- Simulation ---------- */
-let simOn=false,simTimer=null,simVals={},simPrevVals={},simPos={},simStroke={},simHeld={},simLatch={},simLeaks=new Set(),simPuffs=new Map();
+let simOn=false,simTimer=null,simPaused=false,simSpeed=1,simVals={},simPrevVals={},simPos={},simStroke={},simHeld={},simCtrlHeld={},simLatch={},simLeaks=new Set(),simPuffs=new Map(),simP=new Set(),simFill={},simHist=[];
 const MANUAL=new Set(['muskel','knopf','hebel','pedal','stoessel','rollenstoessel','rollenhebel','magnet']);
 const nk=(c,p)=>c+':'+p;
 function hasPilot(a){return(a||[]).some(k=>k==='druck'||k==='vorstufe');}
@@ -970,6 +1008,7 @@ function pilotY(acts){
 function sideActs(c,s){return(s==='L'?c.cfg.actL:c.cfg.actR)||[];}
 function sideForce(c,s){
   if(simHeld[c.id]&&simHeld[c.id][s])return true;
+  if(simCtrlHeld[c.id]&&simCtrlHeld[c.id][s])return true;
   if(simLatch[c.id]&&simLatch[c.id][s])return true;
   const acts=sideActs(c,s);
   if(hasPilot(acts)&&(simVals[nk(c.id,s==='L'?'12':'14')]||0)>0)return true;
@@ -1075,9 +1114,81 @@ function restPos(c){
   else if(sR&&!sL)return c.cfg.pos-1;
   return c.cfg.rest;
 }
+function simSnapshot(){
+  return JSON.stringify({P:[...simP],fill:simFill,pos:simPos,stroke:simStroke,latch:simLatch,vals:simVals,prev:simPrevVals});
+}
+function simRestore(str){
+  const o=JSON.parse(str);
+  simP=new Set(o.P);simFill=o.fill;simPos=o.pos;simStroke=o.stroke;simLatch=o.latch;simVals=o.vals;simPrevVals=o.prev;
+  simLeaks=new Set();simPuffs=new Map();
+  render();
+}
 function simTick(){
+  simHist.push(simSnapshot());
+  if(simHist.length>400)simHist.shift();
+  simStep();
+}
+function simStep(){
   const prevVals=simPrevVals;
-  simVals=simSolve();
+  const steady=simSolve();
+  for(const n of[...simP])if(!(steady[n]>0))simP.delete(n);
+  for(const c of state.comps)if(c.type==='quelle')simP.add(nk(c.id,'1'));
+  const tryAdd=n=>{if(steady[n]>0)simP.add(n);};
+  for(const c of state.comps){
+    const id=c.id;
+    if(c.type==='behaelter'||c.type==='drossel'){
+      if(simP.has(nk(id,'1')))tryAdd(nk(id,'2'));
+      if(simP.has(nk(id,'2')))tryAdd(nk(id,'1'));
+    }else if(c.type==='ventil'){
+      const act=Math.min(simPos[id]!=null?simPos[id]:c.cfg.rest,c.cfg.pos-1);
+      const ps2=valvePresets(c.cfg.pc);
+      const pr=ps2.find(p=>p.id===c.cfg.patterns[act])||ps2[0];
+      for(const[a,b]of pr.conns){
+        if(simP.has(nk(id,a)))tryAdd(nk(id,b));
+        if(simP.has(nk(id,b)))tryAdd(nk(id,a));
+      }
+    }else if(c.type==='rueckschlag'||c.type==='schnell'){
+      if(simP.has(nk(id,'1')))tryAdd(nk(id,'2'));
+    }else if(c.type==='wechsel'){
+      if(simP.has(nk(id,'1'))||simP.has(nk(id,'1*')))tryAdd(nk(id,'2'));
+    }else if(c.type==='zweidruck'){
+      if(simP.has(nk(id,'1'))&&simP.has(nk(id,'1*')))tryAdd(nk(id,'2'));
+    }
+  }
+  {
+    const buckets={};
+    for(const c of state.comps)for(const p of DEFS[c.type].ports(c.cfg)){
+      const[px,py]=rotP(p.x,p.y,c.rot);
+      const kk=Math.round(c.x+px)+','+Math.round(c.y+py);
+      (buckets[kk]=buckets[kk]||[]).push(nk(c.id,p.n));
+    }
+    for(const kk in buckets){
+      const g=buckets[kk];
+      if(g.length>1&&g.some(n=>simP.has(n)))for(const n of g)tryAdd(n);
+    }
+  }
+  const vf=170*simSpeed*0.04;
+  for(const w of state.wires){
+    const A=absPort(w.a),B=absPort(w.b);
+    if(!A||!B)continue;
+    const pts=wirePts(A,B,w.adj);
+    let L=0;
+    for(let i=0;i<pts.length-1;i++)L+=Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y);
+    const f=simFill[w.id]||(simFill[w.id]={a:0,b:0});
+    const na=nk(w.a.c,w.a.p),nb=nk(w.b.c,w.b.p);
+    const hasA=simP.has(na),hasB=simP.has(nb);
+    if(hasA&&hasB){f.a=L;f.b=0;}
+    else{
+      if(hasA)f.a=Math.min(L-f.b,f.a+vf);else f.a=0;
+      if(hasB)f.b=Math.min(L-f.a,f.b+vf);else f.b=0;
+      if(f.a+f.b>=L-0.5){
+        if(hasA)tryAdd(nb);
+        if(hasB)tryAdd(na);
+      }
+    }
+  }
+  simVals={};
+  for(const n of simP)if(steady[n]>0)simVals[n]=steady[n];
   simPrevVals=simVals;
   simLeaks=new Set();
   const wired=new Set();
@@ -1138,7 +1249,7 @@ function simTick(){
     simPos[c.id]=Math.min(pos,c.cfg.pos-1);
   }
   vAdj=null;
-  const dt=0.04;
+  const dt=0.04*simSpeed;
   for(const c of state.comps)if(c.type==='zylinder'){
     const p1=simVals[nk(c.id,'1')]||0;
     const p2=c.cfg.typ==='einfach'?0:(simVals[nk(c.id,'2')]||0);
@@ -1160,11 +1271,14 @@ function startSim(){
   if(simOn)return;
   simOn=true;selArr=[];pending=null;placing=null;drag=null;band=null;
   document.querySelectorAll('.pal').forEach(x=>x.classList.remove('on'));
-  simVals={};simPrevVals={};simPos={};simStroke={};simHeld={};simLatch={};simLeaks=new Set();simPuffs=new Map();
+  simVals={};simPrevVals={};simPos={};simStroke={};simHeld={};simCtrlHeld={};simLatch={};simLeaks=new Set();simPuffs=new Map();
+  simP=new Set();simFill={};simHist=[];simPaused=false;
   for(const c of state.comps)if(c.type==='ventil')simPos[c.id]=restPos(c);
   svg.classList.add('simming');
   el('btnPlay').textContent='■ Simulation stoppen';
   el('btnPlay').classList.add('running');
+  el('btnPause').disabled=false;el('btnStepF').disabled=false;el('btnStepB').disabled=false;
+  el('btnPause').textContent='⏸';
   renderProps();
   simTimer=setInterval(simTick,40);
   simTick();
@@ -1173,11 +1287,25 @@ function stopSim(){
   if(!simOn)return;
   simOn=false;
   clearInterval(simTimer);simTimer=null;
-  simVals={};simPrevVals={};simHeld={};simLatch={};simLeaks=new Set();simPuffs=new Map();
+  simVals={};simPrevVals={};simHeld={};simCtrlHeld={};simLatch={};simLeaks=new Set();simPuffs=new Map();
+  simP=new Set();simFill={};simHist=[];simPaused=false;
   svg.classList.remove('simming');
   el('btnPlay').textContent='▶ Simulation starten';
   el('btnPlay').classList.remove('running');
+  el('btnPause').disabled=true;el('btnStepF').disabled=true;el('btnStepB').disabled=true;
+  el('btnPause').textContent='⏸';
   render();
+}
+function setPaused(p){
+  if(!simOn)return;
+  simPaused=p;
+  if(p){
+    if(simTimer){clearInterval(simTimer);simTimer=null;}
+    el('btnPause').textContent='▶';el('btnPause').title='Weiter';
+  }else{
+    if(!simTimer)simTimer=setInterval(simTick,40);
+    el('btnPause').textContent='⏸';el('btnPause').title='Pause';
+  }
 }
 
 /* ---------- Zoom & Pan ---------- */
@@ -1214,16 +1342,22 @@ svg.addEventListener('pointerdown',e=>{
     if(gg){
       const c=comp(+gg.dataset.comp);
       if(c&&c.type==='ventil'){
-        const[lx]=rotP(mouse.x-c.x,mouse.y-c.y,(360-c.rot)%360);
+        const[lx,ly]=rotP(mouse.x-c.x,mouse.y-c.y,(360-c.rot)%360);
         const side=lx<0?'L':'R';
         const acts=sideActs(c,side);
-        const rA=side==='L'?c.cfg.rastL:c.cfg.rastR;
-        const latching=(acts||[]).some((a,i)=>MANUAL.has(a)&&(Array.isArray(rA)?rA[i]:(i===0&&rA)));
-        if(latching){
-          const cur=!!(simLatch[c.id]&&simLatch[c.id][side]);
-          simLatch[c.id]=Object.assign({},simLatch[c.id],{[side]:!cur});
-        }else if(acts.some(a=>MANUAL.has(a))){
-          simHeld[c.id]=Object.assign({},simHeld[c.id],{[side]:true});
+        const items=[];
+        (acts||[]).forEach((k,i)=>{if(k&&k!=='none')items.push({k,slot:i});});
+        if(items.length){
+          const it=items.length===2?(ly<0?items[0]:items[1]):items[0];
+          const rA=side==='L'?c.cfg.rastL:c.cfg.rastR;
+          const hasRast=MANUAL.has(it.k)&&(Array.isArray(rA)?!!rA[it.slot]:(it.slot===0&&!!rA));
+          if(hasRast){
+            const cur=!!(simLatch[c.id]&&simLatch[c.id][side]);
+            simLatch[c.id]=Object.assign({},simLatch[c.id],{[side]:!cur});
+          }else if(MANUAL.has(it.k)){
+            if(e.ctrlKey||e.metaKey)simCtrlHeld[c.id]=Object.assign({},simCtrlHeld[c.id],{[side]:true});
+            else simHeld[c.id]=Object.assign({},simHeld[c.id],{[side]:true});
+          }
         }
       }
     }
@@ -1254,9 +1388,16 @@ svg.addEventListener('pointerdown',e=>{
   const t=e.target;
   if(t.classList&&t.classList.contains('port')){
     const ref={c:+t.dataset.c,p:t.dataset.p};
-    if(!pending)pending=ref;
-    else if(pending.c===ref.c&&pending.p===ref.p)pending=null;
-    else{pushUndo();state.wires.push({id:state.nextId++,a:pending,b:ref});pending=null;}
+    const cc=comp(ref.c);
+    const busy=cc&&cc.type!=='knoten'&&state.wires.some(w=>(w.a.c===ref.c&&w.a.p===ref.p)||(w.b.c===ref.c&&w.b.p===ref.p));
+    if(!pending){
+      if(busy)return;
+      pending=ref;
+    }else if(pending.c===ref.c&&pending.p===ref.p)pending=null;
+    else{
+      if(busy)return;
+      pushUndo();state.wires.push({id:state.nextId++,a:pending,b:ref});pending=null;
+    }
     render();return;
   }
   const wh=t.closest&&t.closest('[data-wire]');
@@ -1428,6 +1569,9 @@ svg.addEventListener('contextmenu',e=>{
   document.querySelectorAll('.pal').forEach(x=>x.classList.remove('on'));
   render();
 });
+window.addEventListener('keyup',e=>{
+  if((e.key==='Control'||e.key==='Meta')&&simOn)simCtrlHeld={};
+});
 window.addEventListener('keydown',e=>{
   const tag=document.activeElement&&document.activeElement.tagName;
   if(tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA')return;
@@ -1455,6 +1599,18 @@ window.addEventListener('keydown',e=>{
 
 /* ---------- Palette & Werkzeugleiste ---------- */
 el('btnPlay').addEventListener('click',()=>{simOn?stopSim():startSim();});
+el('btnPause').addEventListener('click',()=>setPaused(!simPaused));
+el('btnStepF').addEventListener('click',()=>{
+  if(!simOn)return;
+  setPaused(true);
+  simTick();
+});
+el('btnStepB').addEventListener('click',()=>{
+  if(!simOn)return;
+  setPaused(true);
+  if(simHist.length)simRestore(simHist.pop());
+});
+el('selSpeed').addEventListener('change',()=>{simSpeed=parseFloat(el('selSpeed').value)||1;});
 document.querySelectorAll('.pal').forEach(b=>{
   b.addEventListener('click',()=>{
     if(simOn)return;
