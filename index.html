@@ -37,10 +37,20 @@ h3{font-size:13.5px;margin:0 0 10px}
 button{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:5px;padding:5px 9px;cursor:pointer}
 button:hover{border-color:var(--accent)}
 button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.pal{display:block;width:100%;text-align:left;margin:3px 0}
+.pal{display:flex;align-items:center;gap:9px;width:100%;text-align:left;margin:3px 0;padding:4px 7px}
+.pal svg{width:52px;height:26px;flex-shrink:0;background:#fff;border-radius:4px}
 .pal.on{outline:2px solid var(--accent);outline-offset:-1px}
 label{display:block;margin:9px 0 2px;font-size:12px;color:var(--muted)}
-select,input[type=text]{font:inherit;width:100%;padding:4px 5px;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:5px}
+select,input[type=text],textarea{font:inherit;width:100%;padding:4px 5px;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:5px}
+textarea{resize:vertical}
+#helpBg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;z-index:30;overflow:auto}
+#helpBg.open{display:block}
+#helpBox{max-width:680px;margin:6vh auto;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px 26px;font-size:14.5px;line-height:1.65;box-shadow:0 12px 40px rgba(0,0,0,.35)}
+#helpBox header{display:flex;justify-content:space-between;align-items:center;font-size:18px;font-weight:700;margin-bottom:8px}
+#helpBox h4{margin:18px 0 6px;font-size:15px;color:var(--accent)}
+#helpBox ul{margin:4px 0 8px;padding-left:20px}
+#helpBox li{margin:4px 0}
+#helpBox kbd{background:var(--bg);border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:1px 6px;font:12.5px ui-monospace,monospace}
 .clabel{font:10px system-ui,sans-serif;fill:#777;user-select:none;cursor:move}
 input[type=checkbox]{accent-color:var(--accent)}
 .row{display:flex;gap:6px;margin-top:16px}
@@ -108,27 +118,48 @@ g.comp{cursor:move}
   <button class="pal" data-type="sensor">Endlagen-Sensor</button>
   <div class="grp">Antriebe</div>
   <button class="pal" data-type="zylinder">Zylinder</button>
-  <div class="help">
-    <b>Bedienung</b><br>
-    • Bauteil wählen, dann aufs Blatt klicken (Shift = mehrfach)<br>
-    • Bauteil anklicken → Fenster am Bauteil konfiguriert es; ziehen = verschieben<br>
-    • Mehrfachauswahl: Rahmen aufziehen oder <b>Strg</b>+Klick<br>
-    • <b>Strg+C</b> kopieren · <b>Strg+V</b> einfügen · <b>Strg+X</b> ausschneiden<br>
-    • <b>Strg+Z</b> rückgängig · <b>Strg+Y</b> wiederholen<br>
-    • Leitung: Anschluss (Kreis) anklicken, dann zweiten Anschluss anklicken<br>
-    • Je Anschluss nur <b>eine</b> Leitung — Verzweigungen über Knoten auf der Leitung<br>
-    • Abzweig: beim Leitungsziehen auf eine Leitung klicken, oder Doppelklick auf eine Leitung setzt einen Knoten<br>
-    • Mittlere Leitungssegmente lassen sich mit der Maus verschieben<br>
-    • <b>R</b> = drehen · <b>X</b> = löschen · <b>Esc</b>/Rechtsklick = abbrechen<br>
-    • Mausrad = zoomen · mittlere Maustaste = Blatt verschieben<br>
-    • Schalldämpfer rastet direkt auf Anschlüssen ein<br>
-    • Bauteil löschen lässt Leitungen als Knoten stehen — neues Bauteil einfach passend daraufsetzen<br>
-    • Endlagen-Sensor: auf den Zylinder setzen (vorn = ausgefahren, hinten = eingefahren); am Ventil Betätigung „Pneumatisch (Sensor)" wählen<br>
-    • <b>Simulation:</b> Ventilseite anklicken und halten = betätigen; rastende Betätigungen schalten je Klick um. <b>Strg</b>+Klick hält Taster gedrückt, bis Strg losgelassen wird (mehrere gleichzeitig möglich). Druck-betätigte Ventile bekommen Steueranschlüsse 12/14. Dunkelblaue Leitungen führen Druck.
-  </div>
+  <div class="grp">Beschriftung</div>
+  <button class="pal" data-type="text">Textfeld</button>
+  <button id="btnHelp" style="width:100%;margin-top:16px">❓ Bedienung</button>
 </div>
 
 <div id="canvasWrap"><svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg><div id="float"></div></div>
+
+<div id="helpBg">
+  <div id="helpBox">
+    <header><span>Bedienung</span><button class="close" id="btnHelpClose">×</button></header>
+    <h4>Zeichnen</h4>
+    <ul>
+      <li>Bauteil in der Palette wählen, dann aufs Blatt klicken — <kbd>Shift</kbd> hält den Modus für mehrfaches Platzieren.</li>
+      <li>Bauteil anklicken: Das Fenster daneben konfiguriert es. Ziehen verschiebt, <kbd>R</kbd> dreht, <kbd>X</kbd> löscht.</li>
+      <li>Schalldämpfer rasten direkt auf Anschlüssen ein; Endlagen-Sensoren rasten auf Zylindern ein (vorn = ausgefahren, hinten = eingefahren).</li>
+      <li>Bezeichnungen (1S1, 1A1 …) werden automatisch vergeben, sind im Fenster änderbar und lassen sich mit der Maus verschieben.</li>
+      <li>Beim Löschen eines Bauteils bleiben seine Leitungen als Knoten stehen — ein neues Bauteil passt direkt wieder darauf.</li>
+    </ul>
+    <h4>Leitungen</h4>
+    <ul>
+      <li>Anschluss (Kreis) anklicken, dann zweiten Anschluss anklicken. Je Anschluss nur <b>eine</b> Leitung.</li>
+      <li>Verzweigen: beim Leitungsziehen auf eine Leitung klicken, oder Doppelklick setzt einen Knoten.</li>
+      <li>Mittlere Leitungssegmente lassen sich mit der Maus verschieben.</li>
+    </ul>
+    <h4>Auswahl &amp; Bearbeiten</h4>
+    <ul>
+      <li>Mehrfachauswahl: Rahmen aufziehen oder <kbd>Strg</kbd>+Klick.</li>
+      <li><kbd>Strg</kbd>+<kbd>C</kbd> kopieren · <kbd>Strg</kbd>+<kbd>V</kbd> einfügen · <kbd>Strg</kbd>+<kbd>X</kbd> ausschneiden.</li>
+      <li><kbd>Strg</kbd>+<kbd>Z</kbd> rückgängig · <kbd>Strg</kbd>+<kbd>Y</kbd> wiederholen.</li>
+      <li>Mausrad zoomt, mittlere Maustaste verschiebt das Blatt. <kbd>Esc</kbd> oder Rechtsklick bricht ab.</li>
+    </ul>
+    <h4>Simulation</h4>
+    <ul>
+      <li>▶ startet: Die Luft breitet sich sichtbar von den Quellen aus, dunkelblaue Leitungen führen Druck.</li>
+      <li>Ventilseite anklicken und halten = betätigen; Betätigungen mit Raste schalten je Klick um.</li>
+      <li><kbd>Strg</kbd>+Klick hält Taster gedrückt, bis <kbd>Strg</kbd> losgelassen wird — so lassen sich mehrere gleichzeitig drücken.</li>
+      <li>⏸ Pause · ⏭ Einzelschritt vor · ⏮ Schritt zurück · Geschwindigkeit 0,25×–2×.</li>
+      <li>Druck-betätigte Ventile bekommen Steueranschlüsse 12/14; Sensoren wirken über „Pneumatisch (Sensor)".</li>
+      <li>Pulsierende Kreise = Luft entweicht; mit gelbem Dreieck = Dauerleck (Leitung oder Schalldämpfer fehlt).</li>
+    </ul>
+  </div>
+</div>
 
 <script>
 'use strict';
@@ -180,18 +211,34 @@ let state={comps:[],wires:[],nextId:1};
 let selArr=[], placing=null, pending=null, drag=null, band=null, wdrag=null, ldrag=null, mouse={x:0,y:0};
 const isSel=(kind,id)=>selArr.some(s=>s.kind===kind&&s.id===id);
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
-const TYPE_LETTER={quelle:'P',behaelter:'Z',ventil:'S',rueckschlag:'V',drossel:'V',wechsel:'V',zweidruck:'V',schnell:'V',zylinder:'A',sensor:'S'};
-function autoLabel(type){
-  const L=TYPE_LETTER[type];
+function labelPrefix(type,cfg){
+  switch(type){
+    case'quelle':case'behaelter':return'AZ';
+    case'zylinder':return'MM';
+    case'sensor':return'BG';
+    case'drossel':return'RZ';
+    case'rueckschlag':case'wechsel':case'zweidruck':case'schnell':return'KH';
+    case'ventil':{
+      const acts=[...((cfg&&cfg.actL)||[]),...((cfg&&cfg.actR)||[])];
+      if(acts.some(a=>a==='rollenstoessel'||a==='rollenhebel'||a==='stoessel'))return'BG';
+      if(acts.some(a=>a==='druck'||a==='vorstufe'||a==='sensor'||a==='magnet'))return'QM';
+      if(acts.some(a=>a==='muskel'||a==='knopf'||a==='hebel'||a==='pedal'))return'SJ';
+      return'QM';
+    }
+    default:return'';
+  }
+}
+function autoLabel(type,cfg){
+  const L=labelPrefix(type,cfg);
   if(!L)return'';
   const used=new Set(state.comps.map(c=>c.label));
   let n=1;
-  while(used.has('1'+L+n))n++;
-  return'1'+L+n;
+  while(used.has('-'+L+n))n++;
+  return'-'+L+n;
 }
 function ensureLabels(){
   for(const c of state.comps){
-    if(c.label==null)c.label=autoLabel(c.type);
+    if(c.label==null)c.label=autoLabel(c.type,c.cfg);
     if(c.type==='ventil'&&c.cfg){
       for(const sd of['actL','actR']){
         const arr=c.cfg[sd]||[];
@@ -469,6 +516,23 @@ const DEFS={
       s+='<line x1="-4" y1="0" x2="4" y2="7"/><circle cx="6" cy="9" r="3"/>';
       if(act)s+='<circle cx="0" cy="-8" r="3" style="fill:#0a2e6e;stroke:none"/>';
       return s;
+    }
+  },
+  text:{
+    label:'Textfeld',
+    cfg:()=>({text:'Text',size:14}),
+    ports:()=>[],
+    box(cfg){
+      const sz=cfg.size||14;
+      const lines=String(cfg.text||' ').split('\n');
+      const w=Math.max(30,Math.max(...lines.map(l=>l.length))*sz*0.62)+8;
+      return{x:-4,y:-sz-2,w:w,h:lines.length*sz*1.3+8};
+    },
+    draw(cfg){
+      const sz=cfg.size||14;
+      const lines=String(cfg.text||'').split('\n');
+      return`<text style="font:${sz}px system-ui,sans-serif;fill:#1c1c1c;stroke:none">`+
+        lines.map((l,i)=>`<tspan x="0" dy="${i===0?0:sz*1.3}">${esc(l)||' '}</tspan>`).join('')+'</text>';
     }
   }
 };
@@ -796,7 +860,7 @@ function renderProps(){
     c=comp(single.id);
     if(!c){selArr=[];renderProps();return;}
     title=DEFS[c.type].label;
-    if(c.type!=='knoten')
+    if(c.type!=='knoten'&&c.type!=='daempfer'&&c.type!=='text')
       body+=`<label>Bezeichnung</label><input type="text" data-lbl value="${esc(c.label||'')}" maxlength="20">`;
     if(c.type==='ventil'){
       const g=c.cfg,ps=valvePresets(g.pc),names=posNames(g.pos);
@@ -843,6 +907,9 @@ function renderProps(){
       body+=optHtml('target',[['','— wählen —']].concat(zyl.map(z=>[z.id,z.label||('Zylinder '+z.id)])),g.target==null?'':g.target,'Überwachter Aktor');
       body+=optHtml('mode',[['aus','ausgefahren (Endlage vorn)'],['ein','eingefahren (Endlage hinten)']],g.mode,'Schaltet bei Endlage');
       body+='<p class="muted" style="font-size:11.5px">Auf einen Zylinder ziehen: rastet vorn (ausgefahren) oder hinten (eingefahren) ein und verknüpft sich selbst. Am Wegeventil die Betätigung „Pneumatisch (Sensor)" wählen und diesen Sensor zuordnen.</p>';
+    }else if(c.type==='text'){
+      body+=`<label>Text</label><textarea data-txt rows="3">${esc(c.cfg.text||'')}</textarea>`;
+      body+=optHtml('tsize',[[10,'klein'],[14,'mittel'],[20,'groß']],c.cfg.size||14,'Schriftgröße');
     }
   }
   const btns=(single&&single.kind==='wire')
@@ -863,6 +930,8 @@ function renderProps(){
   });
   const li=p.querySelector('[data-lbl]');
   if(li&&c)li.addEventListener('change',()=>{pushUndo();c.label=li.value.trim();render();});
+  const tx=p.querySelector('[data-txt]');
+  if(tx&&c)tx.addEventListener('change',()=>{pushUndo();c.cfg.text=tx.value;render();positionFloat();});
   p.querySelectorAll('[data-pat]').forEach(btn=>{
     btn.addEventListener('click',()=>{
       if(!c)return;
@@ -933,6 +1002,8 @@ function applyProp(c,k,v){
   }else if(c.type==='sensor'){
     if(k==='target')c.cfg.target=v?+v:null;
     else if(k==='mode')c.cfg.mode=v;
+  }else if(c.type==='text'){
+    if(k==='tsize')c.cfg.size=+v;
   }
   pruneWires();
 }
@@ -979,7 +1050,7 @@ function pasteClip(){
     map[c.id]=nc.id;
     nc.x=c.x+off;nc.y=c.y+off;
     state.comps.push(nc);
-    nc.label=autoLabel(nc.type);
+    nc.label=autoLabel(nc.type,nc.cfg);
     newComps.push(nc);
     newSel.push({kind:'comp',id:nc.id});
   }
@@ -1409,7 +1480,8 @@ svg.addEventListener('pointerdown',e=>{
   }
   if(placing){
     pushUndo();
-    const c={id:state.nextId++,type:placing,x:snap(mouse.x),y:snap(mouse.y),rot:0,cfg:DEFS[placing].cfg(),label:autoLabel(placing)};
+    const cfg0=DEFS[placing].cfg();
+    const c={id:state.nextId++,type:placing,x:snap(mouse.x),y:snap(mouse.y),rot:0,cfg:cfg0,label:autoLabel(placing,cfg0)};
     if(placing==='daempfer'){
       const b=daempferSnap(mouse.x,mouse.y,-1);
       if(b){c.x=b.x;c.y=b.y;c.rot=b.rot;}
@@ -1612,6 +1684,7 @@ window.addEventListener('keyup',e=>{
 window.addEventListener('keydown',e=>{
   const tag=document.activeElement&&document.activeElement.tagName;
   if(tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA')return;
+  if(e.key==='Escape'&&el('helpBg').classList.contains('open')){el('helpBg').classList.remove('open');return;}
   if(simOn){if(e.key==='Escape')stopSim();return;}
   if(e.ctrlKey||e.metaKey){
     const k=e.key.toLowerCase();
@@ -1635,6 +1708,17 @@ window.addEventListener('keydown',e=>{
 });
 
 /* ---------- Palette & Werkzeugleiste ---------- */
+function palSvg(type){
+  const def=DEFS[type],cfg=def.cfg(),b=def.box(cfg),pad=6;
+  return`<svg viewBox="${b.x-pad} ${b.y-pad} ${b.w+2*pad} ${b.h+2*pad}" preserveAspectRatio="xMidYMid meet"><g class="sym">${def.draw(cfg)}</g></svg>`;
+}
+document.querySelectorAll('.pal').forEach(b=>{
+  const name=b.textContent;
+  b.innerHTML=`${palSvg(b.dataset.type)}<span>${name}</span>`;
+});
+el('btnHelp').addEventListener('click',()=>el('helpBg').classList.add('open'));
+el('btnHelpClose').addEventListener('click',()=>el('helpBg').classList.remove('open'));
+el('helpBg').addEventListener('pointerdown',e=>{if(e.target===el('helpBg'))el('helpBg').classList.remove('open');});
 el('btnPlay').addEventListener('click',()=>{simOn?stopSim():startSim();});
 el('btnPause').addEventListener('click',()=>setPaused(!simPaused));
 el('btnStepF').addEventListener('click',()=>{
