@@ -132,6 +132,43 @@ g.comp{cursor:move}
 
 <script>
 'use strict';
+/* App-Icon (Favicon + Manifest) zur Laufzeit erzeugen — Schaltbild "1-2, 4-5 (3 gesperrt)" */
+(function(){
+  try{
+    const cv=document.createElement('canvas');
+    cv.width=cv.height=256;
+    const g=cv.getContext('2d');
+    g.fillStyle='#0e6fb8';
+    if(g.roundRect){g.beginPath();g.roundRect(0,0,256,256,48);g.fill();}
+    else g.fillRect(0,0,256,256);
+    g.strokeStyle='#fff';g.fillStyle='#fff';g.lineWidth=11;g.lineCap='round';g.lineJoin='round';
+    const X=ox=>48+ox*4,TOP=48,BOT=208;
+    g.strokeRect(48,48,160,160);
+    const arrow=(x1,y1,x2,y2)=>{
+      const a=Math.atan2(y2-y1,x2-x1),s=30;
+      g.beginPath();g.moveTo(x1,y1);g.lineTo(x2-12*Math.cos(a),y2-12*Math.sin(a));g.stroke();
+      g.beginPath();
+      g.moveTo(x2,y2);
+      g.lineTo(x2-s*Math.cos(a-0.42),y2-s*Math.sin(a-0.42));
+      g.lineTo(x2-s*Math.cos(a+0.42),y2-s*Math.sin(a+0.42));
+      g.closePath();g.fill();
+    };
+    arrow(X(20),BOT,X(10),TOP);
+    arrow(X(30),TOP,X(34),BOT);
+    g.beginPath();g.moveTo(X(6),BOT);g.lineTo(X(6),BOT-34);g.stroke();
+    g.beginPath();g.moveTo(X(6)-22,BOT-34);g.lineTo(X(6)+22,BOT-34);g.stroke();
+    const url=cv.toDataURL('image/png');
+    let l=document.querySelector('link[rel="icon"]');
+    if(!l){l=document.createElement('link');l.rel='icon';document.head.appendChild(l);}
+    l.type='image/png';l.href=url;
+    const at=document.createElement('link');at.rel='apple-touch-icon';at.href=url;document.head.appendChild(at);
+    const man={name:'Pneumatik-Editor',short_name:'Pneumatik',display:'standalone',background_color:'#ffffff',theme_color:'#0e6fb8',icons:[{src:url,sizes:'256x256',type:'image/png'}]};
+    const lm=document.createElement('link');
+    lm.rel='manifest';
+    lm.href='data:application/manifest+json,'+encodeURIComponent(JSON.stringify(man));
+    document.head.appendChild(lm);
+  }catch(e){}
+})();
 const KEY='pneumatik-editor-v1';
 const svg=document.getElementById('svg');
 const el=id=>document.getElementById(id);
